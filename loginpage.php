@@ -19,24 +19,54 @@
                   <div class="pt-4 pb-2" style="text-align:center;">
                   <img src="assets/img/logo.png" alt="" style="width:200px;height:100px;text-align:center;">
                     <h5 class="card-title text-center pb-0 fs-4">Login to Your Account</h5>
-                    <p class="text-center small">Enter your username & password to login</p>
+                    <p class="text-center small">Enter your company email & PIN to login</p>
                   </div>
+
+                  <?php
+                  // Display error messages
+                  if (isset($_GET['error'])) {
+                      $error = $_GET['error'];
+                      $error_message = '';
+                      $alert_class = 'alert-danger';
+                      
+                      switch ($error) {
+                          case 'empty':
+                              $error_message = 'Please fill in all fields.';
+                              break;
+                          case 'invalid':
+                              $error_message = 'Invalid company email or PIN.';
+                              break;
+                          case 'inactive':
+                              $error_message = 'Your account is inactive. Please contact administrator.';
+                              break;
+                          default:
+                              $error_message = 'An error occurred. Please try again.';
+                      }
+                      
+                      if ($error_message) {
+                          echo '<div class="alert ' . $alert_class . ' alert-dismissible fade show" role="alert">
+                                  ' . $error_message . '
+                                  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                </div>';
+                      }
+                  }
+                  ?>
 
                   <form class="row g-3 needs-validation" action="servercheck.php" method="post" novalidate>
 
                     <div class="col-12">
-                      <label for="yourUsername" class="form-label">Username</label>
+                      <label for="yourUsername" class="form-label">Company Email</label>
                       <div class="input-group has-validation">
                         <span class="input-group-text" id="inputGroupPrepend">@</span>
-                        <input class="form-control" type="email" name="userid" placeholder="Email" autocomplete="off" autofocus="true">
-                        <div class="invalid-feedback">Please enter your username.</div>
+                        <input class="form-control" type="email" name="userid" placeholder="Company Email" autocomplete="off" autofocus="true">
+                        <div class="invalid-feedback">Please enter your company email.</div>
                       </div>
                     </div>
 
                     <div class="col-12">
-                      <label for="yourPassword" class="form-label">Password</label>
-                      <input type="password" name="password" class="form-control" id="yourPassword" required>
-                      <div class="invalid-feedback">Please enter your password!</div>
+                      <label for="yourPassword" class="form-label">Company PIN</label>
+                      <input type="password" name="password" class="form-control" id="yourPassword" required placeholder="Company PIN">
+                      <div class="invalid-feedback">Please enter your company PIN!</div>
                     </div>
 
                     <div class="col-12">
