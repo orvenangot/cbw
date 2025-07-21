@@ -10,7 +10,28 @@ $isEdit = isset($_GET['id']);
 $article = null;
 
 // Fetch article if editing
-if ($isEdit) {
+if (isset($_POST['unique_id']) && $_POST['unique_id'] !== '') {
+    $stmt = $conn->prepare("SELECT * FROM tbl_article WHERE unique_id = ?");
+    $stmt->bindParam(1, $_POST['unique_id'], PDO::PARAM_STR, 12);
+    $stmt->execute();
+    $stmt->bindColumn('unique_id', $unique_id);
+    $stmt->bindColumn('article_author', $article_author);
+    $stmt->bindColumn('article_category', $article_category);
+    $stmt->bindColumn('article_image', $article_image);
+    $stmt->bindColumn('article_headline', $article_headline);
+    $stmt->bindColumn('article_subtitle', $article_subtitle);
+    $stmt->bindColumn('article_body', $article_body);
+    $stmt->fetch(PDO::FETCH_BOUND);
+    $article = [
+        'unique_id' => $unique_id,
+        'article_author' => $article_author,
+        'article_category' => $article_category,
+        'article_image' => $article_image,
+        'article_headline' => $article_headline,
+        'article_subtitle' => $article_subtitle,
+        'article_body' => $article_body
+    ];
+} elseif (isset($_GET['id'])) {
     $stmt = $conn->prepare("SELECT * FROM tbl_article WHERE unique_id = ?");
     $stmt->bindParam(1, $_GET['id'], PDO::PARAM_STR, 12);
     $stmt->execute();
@@ -58,10 +79,11 @@ if (isset($_POST['delete_article']) && isset($_POST['unique_id'])) {
     }
 }
 
-// Handle Create/Update
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['delete_article'])) {
+// Handle Create/Update (refactored to match view_partner.php style)
+if (isset($_POST['addsubmit'])) {
     try {
         $conn->beginTransaction();
+        $unique_id = isset($_POST['unique_id']) ? $_POST['unique_id'] : '';
         $author_id = ($_SESSION['user_role'] === 'Admin' && isset($_POST['article_author']))
             ? $_POST['article_author']
             : $_SESSION['user_id'];
@@ -70,25 +92,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['delete_article'])) {
         $subtitle = $_POST['subtitle'];
         $body = $_POST['body'];
         $imagePath = isset($_POST['current_image']) ? $_POST['current_image'] : null;
-        if (isset($_FILES['articleImage']) && $_FILES['articleImage']['error'] == 0) {
-            $allowed = ['jpg', 'jpeg', 'png', 'gif'];
-            $filetype = strtolower(pathinfo($_FILES['articleImage']['name'], PATHINFO_EXTENSION));
-            if (!in_array($filetype, $allowed)) {
-                throw new Exception("Invalid file type. Allowed: " . implode(', ', $allowed));
-            }
+        $name = isset($_FILES['articleImage']['name']) ? $_FILES['articleImage']['name'] : '';
+        $tmp_name = isset($_FILES['articleImage']['tmp_name']) ? $_FILES['articleImage']['tmp_name'] : '';
+        $t = time();
+        $filetype = $name ? strtolower(pathinfo($name, PATHINFO_EXTENSION)) : '';
+        $allowed = ['jpg', 'jpeg', 'png', 'gif'];
+        
+        // Check if article exists
+        $checkquery = "SELECT unique_id FROM tbl_article WHERE unique_id = ?";
+        $result = $conn->prepare($checkquery);
+        $result->bindParam(1, $unique_id);
+        $result->execute();
+        $num = $result->rowCount();
+        
+        // Handle file upload if present
+        if ($name && in_array($filetype, $allowed)) {
             $uploadDir = 'assets/img/articles/';
             is_dir($uploadDir) || mkdir($uploadDir, 0777, true);
             $newname = date('YmdHis') . '.' . $filetype;
             $target = $uploadDir . $newname;
-            if (!move_uploaded_file($_FILES['articleImage']['tmp_name'], $target)) {
+            if (!move_uploaded_file($tmp_name, $target)) {
                 throw new Exception("Error uploading file.");
             }
             if ($imagePath && file_exists($imagePath)) {
                 unlink($imagePath);
             }
             $imagePath = $target;
+        } elseif ($name && !in_array($filetype, $allowed)) {
+            throw new Exception("Invalid file type. Allowed: " . implode(', ', $allowed));
         }
-        if ($isEdit) {
+        
+        if ($num > 0) {
+            // Update
             $stmt = $conn->prepare("UPDATE tbl_article SET article_author=?, article_category=?, article_image=?, article_headline=?, article_subtitle=?, article_body=? WHERE unique_id=?");
             $stmt->bindParam(1, $author_id);
             $stmt->bindParam(2, $category);
@@ -96,10 +131,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['delete_article'])) {
             $stmt->bindParam(4, $headline);
             $stmt->bindParam(5, $subtitle);
             $stmt->bindParam(6, $body);
-            $stmt->bindParam(7, $_GET['id'], PDO::PARAM_STR, 12);
+            $stmt->bindParam(7, $unique_id, PDO::PARAM_STR, 12);
             $stmt->execute();
             $msg = "Article updated successfully!";
         } else {
+            // Insert
             $stmt = $conn->prepare("INSERT INTO tbl_article (article_author, article_category, article_image, article_headline, article_subtitle, article_body) VALUES (?, ?, ?, ?, ?, ?)");
             $stmt->bindParam(1, $author_id);
             $stmt->bindParam(2, $category);
@@ -112,10 +148,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['delete_article'])) {
         }
         $conn->commit();
         $msgClass = "alert-success";
-        if (!$isEdit) {
-            header('Location: ' . $_SERVER['PHP_SELF']);
-            exit();
-        }
+        header('Location: all_articles.php');
+        exit();
     } catch (Exception $e) {
         $conn->rollBack();
         $msg = "Error: " . $e->getMessage();
@@ -179,7 +213,12 @@ if (isset($_GET['msg']) && $_GET['msg'] == 'saved') {
                             <h5 class="card-title">Article Information</h5>
 
                             <!-- Article Form -->
-                            <form action="<?php echo $isEdit ? "save_article.php?id=" . $_GET['id'] : "save_article.php"; ?>" method="POST" enctype="multipart/form-data" class="row g-3">
+                            <form action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" method="POST" enctype="multipart/form-data" class="row g-3">
+                                <!-- Hidden unique_id for edit -->
+                                <?php if ($isEdit && $article && isset($article['unique_id'])): ?>
+                                    <input type="hidden" name="unique_id" value="<?php echo htmlspecialchars($article['unique_id']); ?>">
+                                <?php endif; ?>
+                                <input type="hidden" name="addsubmit" value="1">
                                 <!-- Article Image -->
                                 <div class="col-12">
                                     <label for="articleImage" class="form-label">Article Image</label>
