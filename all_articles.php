@@ -3,46 +3,22 @@ require_once 'Auth/auth.php';
 include('dbconnect.php');
 $conn = $pdo;
 
-
-// Modify the query based on user role
-if ($_SESSION['user_role'] === 'Admin') {
-    // Admin sees all articles
-    $stmt = $conn->query("SELECT *, DATE_FORMAT(created_at, '%M %d, %Y %h:%i %p') as formatted_date 
-                         FROM tbl_article 
-                         ORDER BY created_at DESC, unique_id DESC");
-} else {
-    // Regular users only see their own articles
-    $stmt = $conn->prepare("SELECT *, DATE_FORMAT(created_at, '%M %d, %Y %h:%i %p') as formatted_date 
-                           FROM tbl_article 
-                           WHERE article_author = ? 
-                           ORDER BY created_at DESC, unique_id DESC");
-    $stmt->execute([$_SESSION['user_id']]);
-}
-
 // Delete article if requested
 if (isset($_POST['delete_article']) && isset($_POST['unique_id'])) {
     try {
-        // Begin transaction
         $conn->beginTransaction();
-
-        // Get image path first
         $stmt = $conn->prepare("SELECT article_image FROM tbl_article WHERE unique_id = ?");
         $stmt->bindParam(1, $_POST['unique_id']);
         $stmt->execute();
         $article = $stmt->fetch();
-
         if ($article && $article['article_image']) {
-            // Delete the image file if it exists
             if (file_exists($article['article_image'])) {
                 unlink($article['article_image']);
             }
         }
-
-        // Delete the article record
         $stmt = $conn->prepare("DELETE FROM tbl_article WHERE unique_id = ?");
         $stmt->bindParam(1, $_POST['unique_id']);
         $stmt->execute();
-
         $conn->commit();
         $msg = "Article deleted successfully!";
         $msgClass = "text-success";
@@ -52,16 +28,6 @@ if (isset($_POST['delete_article']) && isset($_POST['unique_id'])) {
         $msg = "Error deleting article: " . $e->getMessage();
         $msgClass = "text-danger";
     }
-}
-
-// Modify the query based on user role for feedbacks
-if ($_SESSION['user_role'] === 'Admin') {
-    // Admin sees all feedbacks, join with accounts for CreatedBy
-    $feedbackStmt = $conn->query("SELECT f.*, DATE_FORMAT(f.created_at, '%M %d, %Y %h:%i %p') as formatted_date, CONCAT(f.fname, ' ', f.lname) as full_name, CONCAT(a.user_fname, ' ', a.user_lname) as created_by FROM tbl_feedbacks f LEFT JOIN tbl_users a ON f.user_id = a.unique_id ORDER BY f.created_at DESC");
-} else {
-    // Regular users only see their own feedbacks
-    $feedbackStmt = $conn->prepare("SELECT f.*, DATE_FORMAT(f.created_at, '%M %d, %Y %h:%i %p') as formatted_date, CONCAT(f.fname, ' ', f.lname) as full_name FROM tbl_feedbacks f WHERE f.user_id = ? ORDER BY f.created_at DESC");
-    $feedbackStmt->execute([$_SESSION['user_id']]);
 }
 
 // Handle Add/Edit/Delete Feedback
@@ -137,11 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <h1>All Articles</h1>
             <nav>
                 <ol class="breadcrumb">
-                    <?php if ($_SESSION['user_role'] === 'Admin'): ?>
-                        <li class="breadcrumb-item"><a href="admin_dashboard.php">Admin</a></li>
-                    <?php else: ?>
-                        <li class="breadcrumb-item"><a href="all_articles.php">Articles</a></li>
-                    <?php endif; ?>
+                    <li class="breadcrumb-item"><a href="admin_dashboard.php">Admin</a></li>
                     <li class="breadcrumb-item active">All Articles</li>
                 </ol>
             </nav>
@@ -164,9 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <tr>
                                         <th>Date Created</th>
                                         <th>Image</th>
-                                        <?php if ($_SESSION['user_role'] === 'Admin'): ?>
-                                            <th>Author</th>
-                                        <?php endif; ?>
+                                        <th>Author</th>
                                         <th>Category</th>
                                         <th>Headline</th>
                                         <th>Actions</th>
@@ -174,13 +134,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 </thead>
                                 <tbody>
                                     <?php
-                                    $query = "SELECT unique_id,article_author,article_category,article_image,article_headline,article_subtitle,article_body,created_at 
-                                    FROM tbl_article ORDER BY created_at DESC";
+                                    // Refactored: Use bindColumn and FETCH_BOUND for articles
+                                    $query = "SELECT unique_id, article_author, article_category, article_image, article_headline, article_subtitle, article_body, created_at FROM tbl_article ORDER BY created_at DESC";
                                     $stmt = $pdo->prepare($query);
                                     $stmt->execute();
-
-                                    $pcount = $stmt->rowCount();
-                                    
                                     $stmt->bindColumn('unique_id', $unique_id);
                                     $stmt->bindColumn('article_author', $article_author);
                                     $stmt->bindColumn('article_category', $article_category);
@@ -189,90 +146,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $stmt->bindColumn('article_subtitle', $article_subtitle);
                                     $stmt->bindColumn('article_body', $article_body);
                                     $stmt->bindColumn('created_at', $created_at);
-
-                                    $rowid = 1;
-                                    while ($row = $stmt->fetch( PDO::FETCH_BOUND))
-                                    {
+                                    while ($row = $stmt->fetch(PDO::FETCH_BOUND)) {
                                         $formatted_date = date_format(date_create($created_at),"M d, Y");
                                         ?>
                                         <tr>
                                             <td><?php echo $formatted_date; ?></td>
                                             <td>
-                                                <?php
-                                                    if($article_image!="")
-                                                    {
-                                                        ?>
-                                                        <img src="<?php echo $article_image; ?>" alt="Article Image" style="max-width: 100px; max-height: 100px;" class="img-thumbnail">
-                                                        <?php
-                                                    }
-                                                ?>
+                                                <?php if($article_image!="") { ?>
+                                                    <img src="<?php echo $article_image; ?>" alt="Article Image" style="max-width: 100px; max-height: 100px;" class="img-thumbnail">
+                                                <?php } ?>
                                             </td>
                                             <td><?php echo htmlspecialchars($article_author); ?></td>
                                             <td>
                                                 <?php
-                                                if($article_category=="breaking")
-                                                {
-                                                    ?>
-                                                    <span class="badge bg-danger">Breaking</span>
-                                                    <?php
-                                                }
-                                                elseif($article_category=="local")
-                                                {
-                                                    ?>
-                                                    <span class="badge bg-success">Local</span>
-                                                    <?php
-                                                }
-                                                elseif($article_category=="national")
-                                                {
-                                                    ?>
-                                                    <span class="badge bg-primary">National</span>
-                                                    <?php
-                                                }
-                                                elseif($article_category=="international")
-                                                {
-                                                    ?>
-                                                    <span class="badge bg-info">International</span>
-                                                    <?php
-                                                }
-                                                elseif($article_category=="sports")
-                                                {
-                                                    ?>
-                                                    <span class="badge bg-warning">Sports</span>
-                                                    <?php
-                                                }
-                                                elseif($article_category=="technology")
-                                                {
-                                                    ?>
-                                                    <span class="badge bg-secondary">Technology</span>
-                                                    <?php
-                                                }
-                                                elseif($article_category=="entertainment")
-                                                {
-                                                    ?>
-                                                    <span class="badge bg-success">Entertainment</span>
-                                                    <?php
-                                                }
-                                                elseif($article_category=="default")
-                                                {
-                                                    ?>
-                                                    <span class="badge bg-dark">Default</span>
-                                                    <?php
-                                                }
-                                                ?> 
-                                               
+                                                $category_badges = [
+                                                    'breaking' => 'danger',
+                                                    'local' => 'success',
+                                                    'national' => 'primary',
+                                                    'international' => 'info',
+                                                    'sports' => 'warning',
+                                                    'technology' => 'secondary',
+                                                    'entertainment' => 'success',
+                                                    'default' => 'dark',
+                                                ];
+                                                $badge = isset($category_badges[$article_category]) ? $category_badges[$article_category] : 'secondary';
+                                                ?>
+                                                <span class="badge bg-<?php echo $badge; ?>"><?php echo htmlspecialchars(ucfirst($article_category)); ?></span>
                                             </td>
                                             <td><?php echo htmlspecialchars($article_headline); ?></td>
                                             <td>
                                                 <div class="btn-group" role="group">
-                                                    <a href="save_article.php?id=<?php echo $row['unique_id']; ?>"
-                                                        class="btn btn-sm btn-primary"
-                                                        title="Edit">
+                                                    <a href="save_article.php?id=<?php echo $unique_id; ?>" class="btn btn-sm btn-primary" title="Edit">
                                                         <i class="bi bi-pencil"></i>
                                                     </a>
-                                                    <button type="button"
-                                                        class="btn btn-sm btn-danger"
-                                                        onclick="confirmDelete('<?php echo $row['unique_id']; ?>')"
-                                                        title="Delete">
+                                                    <button type="button" class="btn btn-sm btn-danger" onclick="confirmDelete('<?php echo $unique_id; ?>')" title="Delete">
                                                         <i class="bi bi-trash"></i>
                                                     </button>
                                                 </div>
@@ -302,35 +209,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         <th>Image</th>
                                         <th>Full Name</th>
                                         <th>Feedback</th>
-                                        <?php if ($_SESSION['user_role'] === 'Admin'): ?>
-                                            <th>Created By</th>
-                                        <?php endif; ?>
                                         <th>Created At</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php while ($feedback = $feedbackStmt->fetch()): ?>
+                                    <?php
+                                    // Refactored: Use bindColumn and FETCH_BOUND for feedbacks
+                                    $query = "SELECT unique_id, fname, lname, image, feedback, created_at FROM tbl_feedbacks ORDER BY created_at DESC";
+                                    $stmt = $pdo->prepare($query);
+                                    $stmt->execute();
+                                    $stmt->bindColumn('unique_id', $fb_unique_id);
+                                    $stmt->bindColumn('fname', $fb_fname);
+                                    $stmt->bindColumn('lname', $fb_lname);
+                                    $stmt->bindColumn('image', $fb_image);
+                                    $stmt->bindColumn('feedback', $fb_feedback);
+                                    $stmt->bindColumn('created_at', $fb_created_at);
+                                    while ($row = $stmt->fetch(PDO::FETCH_BOUND)) {
+                                        $full_name = $fb_fname . ' ' . $fb_lname;
+                                        $formatted_date = date('M d, Y h:i A', strtotime($fb_created_at));
+                                        ?>
                                         <tr>
                                             <td>
-                                                <?php if ($feedback['image']): ?>
-                                                    <img src="<?php echo $feedback['image']; ?>" alt="User Image" style="max-width: 100px; max-height: 100px;" class="img-thumbnail">
+                                                <?php if ($fb_image): ?>
+                                                    <img src="<?php echo $fb_image; ?>" alt="User Image" style="max-width: 100px; max-height: 100px;" class="img-thumbnail">
                                                 <?php endif; ?>
                                             </td>
-                                            <td><?php echo htmlspecialchars($feedback['full_name']); ?></td>
-                                            <td><?php echo htmlspecialchars($feedback['feedback']); ?></td>
-                                            <?php if ($_SESSION['user_role'] === 'Admin'): ?>
-                                                <td><?php echo htmlspecialchars($feedback['created_by'] ?? ''); ?></td>
-                                            <?php endif; ?>
-                                            <td><?php echo $feedback['formatted_date']; ?></td>
+                                            <td><?php echo htmlspecialchars($full_name); ?></td>
+                                            <td><?php echo htmlspecialchars($fb_feedback); ?></td>
+                                            <td><?php echo $formatted_date; ?></td>
                                             <td>
                                                 <div class="btn-group" role="group">
-                                                    <button type="button" class="btn btn-sm btn-primary" onclick="editFeedback('<?php echo $feedback['unique_id']; ?>', '<?php echo htmlspecialchars(addslashes($feedback['fname'])); ?>', '<?php echo htmlspecialchars(addslashes($feedback['lname'])); ?>', '<?php echo htmlspecialchars(addslashes($feedback['feedback'])); ?>', '<?php echo $feedback['image']; ?>')" title="Edit"><i class="bi bi-pencil"></i></button>
-                                                    <button type="button" class="btn btn-sm btn-danger" onclick="confirmDeleteFeedback('<?php echo $feedback['unique_id']; ?>')" title="Delete"><i class="bi bi-trash"></i></button>
+                                                    <button type="button" class="btn btn-sm btn-primary" onclick="editFeedback('<?php echo $fb_unique_id; ?>', '<?php echo htmlspecialchars(addslashes($fb_fname)); ?>', '<?php echo htmlspecialchars(addslashes($fb_lname)); ?>', '<?php echo htmlspecialchars(addslashes($fb_feedback)); ?>', '<?php echo $fb_image; ?>')" title="Edit"><i class="bi bi-pencil"></i></button>
+                                                    <button type="button" class="btn btn-sm btn-danger" onclick="confirmDeleteFeedback('<?php echo $fb_unique_id; ?>')" title="Delete"><i class="bi bi-trash"></i></button>
                                                 </div>
                                             </td>
                                         </tr>
-                                    <?php endwhile; ?>
+                                        <?php
+                                    }
+                                    ?>
                                 </tbody>
                             </table>
                         </div>
