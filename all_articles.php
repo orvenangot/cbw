@@ -3,26 +3,26 @@ require_once 'Auth/auth.php';
 include('dbconnect.php');
 $conn = $pdo;
 
-// Delete article if requested
+// Delete article if requested (refactored to match save_article.php style)
 if (isset($_POST['delete_article']) && isset($_POST['unique_id'])) {
     try {
         $conn->beginTransaction();
         $stmt = $conn->prepare("SELECT article_image FROM tbl_article WHERE unique_id = ?");
-        $stmt->bindParam(1, $_POST['unique_id']);
+        $stmt->bindParam(1, $_POST['unique_id'], PDO::PARAM_STR, 12);
         $stmt->execute();
-        $article = $stmt->fetch();
-        if ($article && $article['article_image']) {
-            if (file_exists($article['article_image'])) {
-                unlink($article['article_image']);
-            }
+        $stmt->bindColumn('article_image', $del_image);
+        $stmt->fetch(PDO::FETCH_BOUND);
+        if ($del_image && file_exists($del_image)) {
+            unlink($del_image);
         }
         $stmt = $conn->prepare("DELETE FROM tbl_article WHERE unique_id = ?");
-        $stmt->bindParam(1, $_POST['unique_id']);
+        $stmt->bindParam(1, $_POST['unique_id'], PDO::PARAM_STR, 12);
         $stmt->execute();
         $conn->commit();
         $msg = "Article deleted successfully!";
         $msgClass = "text-success";
         header('Location: ' . $_SERVER['PHP_SELF']);
+        exit();
     } catch (Exception $e) {
         $conn->rollBack();
         $msg = "Error deleting article: " . $e->getMessage();
@@ -30,61 +30,112 @@ if (isset($_POST['delete_article']) && isset($_POST['unique_id'])) {
     }
 }
 
-// Handle Add/Edit/Delete Feedback
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Add Feedback
-    if (isset($_POST['add_feedback'])) {
-        $fname = trim($_POST['fname']);
-        $lname = trim($_POST['lname']);
-        $feedback = trim($_POST['feedback']);
-        $user_id = $_SESSION['user_id'];
-        $imagePath = null;
-        if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-            $uploadDir = 'assets/img/users/';
-            $fileName = time() . basename($_FILES['image']['name']);
-            $targetFile = $uploadDir . $fileName;
-            if (move_uploaded_file($_FILES['image']['tmp_name'], $targetFile)) {
-                $imagePath = $targetFile;
+// Update article if requested (optional, if you want to support inline update from this page)
+if (isset($_POST['edit_article']) && isset($_POST['unique_id'])) {
+    try {
+        $conn->beginTransaction();
+        $unique_id = $_POST['unique_id'];
+        $author_id = $_POST['article_author'];
+        $category = $_POST['newsCategory'];
+        $headline = $_POST['headline'];
+        $subtitle = $_POST['subtitle'];
+        $body = $_POST['body'];
+        $imagePath = isset($_POST['current_image']) ? $_POST['current_image'] : null;
+        $name = isset($_FILES['articleImage']['name']) ? $_FILES['articleImage']['name'] : '';
+        $tmp_name = isset($_FILES['articleImage']['tmp_name']) ? $_FILES['articleImage']['tmp_name'] : '';
+        $filetype = $name ? strtolower(pathinfo($name, PATHINFO_EXTENSION)) : '';
+        $allowed = ['jpg', 'jpeg', 'png', 'gif'];
+
+        // Handle file upload if present
+        if ($name && in_array($filetype, $allowed)) {
+            $uploadDir = 'assets/img/articles/';
+            is_dir($uploadDir) || mkdir($uploadDir, 0777, true);
+            $newname = date('YmdHis') . '.' . $filetype;
+            $target = $uploadDir . $newname;
+            if (!move_uploaded_file($tmp_name, $target)) {
+                throw new Exception("Error uploading file.");
             }
-        }
-        $stmt = $conn->prepare("INSERT INTO tbl_feedbacks (fname, lname, image, feedback, user_id) VALUES (?, ?, ?, ?, ?)");
-        $stmt->execute([$fname, $lname, $imagePath, $feedback, $user_id]);
-        header('Location: ' . $_SERVER['PHP_SELF']);
-        exit();
-    }
-    // Edit Feedback
-    if (isset($_POST['edit_feedback']) && isset($_POST['feedback_id'])) {
-        $feedback_id = $_POST['feedback_id'];
-        $fname = trim($_POST['fname']);
-        $lname = trim($_POST['lname']);
-        $feedback = trim($_POST['feedback']);
-        $imagePath = $_POST['existing_image'] ?? null;
-        if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-            $uploadDir = 'assets/img/users/';
-            $fileName = time() . basename($_FILES['image']['name']);
-            $targetFile = $uploadDir . $fileName;
-            if (move_uploaded_file($_FILES['image']['tmp_name'], $targetFile)) {
-                $imagePath = $targetFile;
+            if ($imagePath && file_exists($imagePath)) {
+                unlink($imagePath);
             }
+            $imagePath = $target;
+        } elseif ($name && !in_array($filetype, $allowed)) {
+            throw new Exception("Invalid file type. Allowed: " . implode(', ', $allowed));
         }
-        $stmt = $conn->prepare("UPDATE tbl_feedbacks SET fname=?, lname=?, image=?, feedback=? WHERE unique_id=?");
-        $stmt->execute([$fname, $lname, $imagePath, $feedback, $feedback_id]);
+
+        $stmt = $conn->prepare("UPDATE tbl_article SET article_author=?, article_category=?, article_image=?, article_headline=?, article_subtitle=?, article_body=? WHERE unique_id=?");
+        $stmt->bindParam(1, $author_id);
+        $stmt->bindParam(2, $category);
+        $stmt->bindParam(3, $imagePath);
+        $stmt->bindParam(4, $headline);
+        $stmt->bindParam(5, $subtitle);
+        $stmt->bindParam(6, $body);
+        $stmt->bindParam(7, $unique_id, PDO::PARAM_STR, 12);
+        $stmt->execute();
+        $conn->commit();
+        $msg = "Article updated successfully!";
+        $msgClass = "text-success";
         header('Location: ' . $_SERVER['PHP_SELF']);
         exit();
+    } catch (Exception $e) {
+        $conn->rollBack();
+        $msg = "Error updating article: " . $e->getMessage();
+        $msgClass = "text-danger";
     }
-    // Delete Feedback
-    if (isset($_POST['delete_feedback']) && isset($_POST['feedback_id'])) {
-        $stmt = $conn->prepare("SELECT image FROM tbl_feedbacks WHERE unique_id = ?");
-        $stmt->execute([$_POST['feedback_id']]);
-        $fb = $stmt->fetch();
-        if ($fb && $fb['image'] && file_exists($fb['image'])) {
-            unlink($fb['image']);
+}
+
+// Handle Add Feedback
+if (isset($_POST['add_feedback'])) {
+    $fname = trim($_POST['fname']);
+    $lname = trim($_POST['lname']);
+    $feedback = trim($_POST['feedback']);
+    $user_id = $_SESSION['user_id'];
+    $imagePath = null;
+    if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+        $uploadDir = 'assets/img/users/';
+        $fileName = time() . basename($_FILES['image']['name']);
+        $targetFile = $uploadDir . $fileName;
+        if (move_uploaded_file($_FILES['image']['tmp_name'], $targetFile)) {
+            $imagePath = $targetFile;
         }
-        $stmt = $conn->prepare("DELETE FROM tbl_feedbacks WHERE unique_id = ?");
-        $stmt->execute([$_POST['feedback_id']]);
-        header('Location: ' . $_SERVER['PHP_SELF']);
-        exit();
     }
+    $stmt = $conn->prepare("INSERT INTO tbl_feedbacks (fname, lname, image, feedback, user_id) VALUES (?, ?, ?, ?, ?)");
+    $stmt->execute([$fname, $lname, $imagePath, $feedback, $user_id]);
+    header('Location: ' . $_SERVER['PHP_SELF']);
+    exit();
+}
+// Handle Edit Feedback
+if (isset($_POST['edit_feedback']) && isset($_POST['feedback_id'])) {
+    $feedback_id = $_POST['feedback_id'];
+    $fname = trim($_POST['fname']);
+    $lname = trim($_POST['lname']);
+    $feedback = trim($_POST['feedback']);
+    $imagePath = $_POST['existing_image'] ?? null;
+    if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+        $uploadDir = 'assets/img/users/';
+        $fileName = time() . basename($_FILES['image']['name']);
+        $targetFile = $uploadDir . $fileName;
+        if (move_uploaded_file($_FILES['image']['tmp_name'], $targetFile)) {
+            $imagePath = $targetFile;
+        }
+    }
+    $stmt = $conn->prepare("UPDATE tbl_feedbacks SET fname=?, lname=?, image=?, feedback=? WHERE unique_id=?");
+    $stmt->execute([$fname, $lname, $imagePath, $feedback, $feedback_id]);
+    header('Location: ' . $_SERVER['PHP_SELF']);
+    exit();
+}
+// Handle Delete Feedback
+if (isset($_POST['delete_feedback']) && isset($_POST['feedback_id'])) {
+    $stmt = $conn->prepare("SELECT image FROM tbl_feedbacks WHERE unique_id = ?");
+    $stmt->execute([$_POST['feedback_id']]);
+    $fb = $stmt->fetch();
+    if ($fb && $fb['image'] && file_exists($fb['image'])) {
+        unlink($fb['image']);
+    }
+    $stmt = $conn->prepare("DELETE FROM tbl_feedbacks WHERE unique_id = ?");
+    $stmt->execute([$_POST['feedback_id']]);
+    header('Location: ' . $_SERVER['PHP_SELF']);
+    exit();
 }
 ?>
 <!DOCTYPE html>
@@ -135,9 +186,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <tbody>
                                     <?php
                                     // Refactored: Use bindColumn and FETCH_BOUND for articles
-                                    $query = "SELECT unique_id, article_author, article_category, article_image, article_headline, article_subtitle, article_body, created_at FROM tbl_article ORDER BY created_at DESC";
-                                    $stmt = $pdo->prepare($query);
-                                    $stmt->execute();
+                                    if ($_SESSION['user_role'] === 'Admin') {
+                                        $query = "SELECT unique_id, article_author, article_category, article_image, article_headline, article_subtitle, article_body, created_at FROM tbl_article ORDER BY created_at DESC";
+                                        $stmt = $pdo->prepare($query);
+                                        $stmt->execute();
+                                    } else {
+                                        $query = "SELECT unique_id, article_author, article_category, article_image, article_headline, article_subtitle, article_body, created_at FROM tbl_article WHERE article_author = ? ORDER BY created_at DESC";
+                                        $stmt = $pdo->prepare($query);
+                                        $stmt->execute([$_SESSION['user_fname'] . ' ' . $_SESSION['user_lname']]);
+                                    }
                                     $stmt->bindColumn('unique_id', $unique_id);
                                     $stmt->bindColumn('article_author', $article_author);
                                     $stmt->bindColumn('article_category', $article_category);

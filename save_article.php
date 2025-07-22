@@ -84,9 +84,11 @@ if (isset($_POST['addsubmit'])) {
     try {
         $conn->beginTransaction();
         $unique_id = isset($_POST['unique_id']) ? $_POST['unique_id'] : '';
-        $author_id = ($_SESSION['user_role'] === 'Admin' && isset($_POST['article_author']))
-            ? $_POST['article_author']
-            : $_SESSION['user_id'];
+        if ($_SESSION['user_role'] === 'Admin') {
+            $author_name = isset($_POST['author_name']) ? trim($_POST['author_name']) : '';
+        } else {
+            $author_name = $_SESSION['user_fname'] . ' ' . $_SESSION['user_lname'];
+        }
         $category = $_POST['newsCategory'];
         $headline = $_POST['headline'];
         $subtitle = $_POST['subtitle'];
@@ -125,7 +127,7 @@ if (isset($_POST['addsubmit'])) {
         if ($num > 0) {
             // Update
             $stmt = $conn->prepare("UPDATE tbl_article SET article_author=?, article_category=?, article_image=?, article_headline=?, article_subtitle=?, article_body=? WHERE unique_id=?");
-            $stmt->bindParam(1, $author_id);
+            $stmt->bindParam(1, $author_name);
             $stmt->bindParam(2, $category);
             $stmt->bindParam(3, $imagePath);
             $stmt->bindParam(4, $headline);
@@ -137,7 +139,7 @@ if (isset($_POST['addsubmit'])) {
         } else {
             // Insert
             $stmt = $conn->prepare("INSERT INTO tbl_article (article_author, article_category, article_image, article_headline, article_subtitle, article_body) VALUES (?, ?, ?, ?, ?, ?)");
-            $stmt->bindParam(1, $author_id);
+            $stmt->bindParam(1, $author_name);
             $stmt->bindParam(2, $category);
             $stmt->bindParam(3, $imagePath);
             $stmt->bindParam(4, $headline);
@@ -239,32 +241,12 @@ if (isset($_GET['msg']) && $_GET['msg'] == 'saved') {
                                 <!-- Author (Optional) -->
                                 <?php if ($_SESSION['user_role'] === 'Admin'): ?>
                                     <div class="mb-3">
-                                        <label for="article_author" class="form-label">Author</label>
-                                        <select class="form-select" id="article_author" name="article_author" required>
-                                            <option value="" <?php echo !$isEdit ? 'selected' : ''; ?>>Select an author</option>
-                                            <?php
-                                            // Fetch all users (both admins and authors) with their full names
-                                            $stmt = $conn->prepare("SELECT unique_id, user_fname, user_lname, user_role 
-                                                                  FROM tbl_users 
-                                                                  WHERE user_role IN ('Author')
-                                                                  ORDER BY user_fname ASC");
-                                            $stmt->execute();
-                                            $authors = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-                                            foreach ($authors as $author):
-                                                // Create full name by concatenating first and last name properly
-                                                $fullName = $author['user_fname'] . ' ' . $author['user_lname'];
-                                            ?>
-                                                <option value="<?php echo $author['unique_id']; ?>"
-                                                    <?php echo ($isEdit && $article['article_author'] == $author['unique_id']) ? 'selected' : ''; ?>>
-                                                    <?php echo htmlspecialchars($fullName); ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
+                                        <label for="author_name" class="form-label">Author Name</label>
+                                        <input type="text" class="form-control" id="author_name" name="author_name" required value="<?php echo $isEdit ? htmlspecialchars($article['article_author']) : ''; ?>">
                                     </div>
                                 <?php else: ?>
                                     <!-- Hidden input for non-admin users -->
-                                    <input type="hidden" name="article_author" value="<?php echo $_SESSION['user_id']; ?>">
+                                    <input type="hidden" name="author_name" value="<?php echo $_SESSION['user_fname'] . ' ' . $_SESSION['user_lname']; ?>">
                                 <?php endif; ?>
                                 <!-- News Category -->
                                 <div class="col-12">
