@@ -255,13 +255,17 @@ if (isset($_GET['msg']) && $_GET['msg'] == 'saved') {
                                         <option value="" disabled <?php echo !$isEdit ? 'selected' : ''; ?>>Select a category</option>
                                         <?php
                                         $categories = [
-                                            'breaking' => 'Breaking News',
-                                            'local' => 'Local News',
-                                            'national' => 'National News',
-                                            'international' => 'International News',
-                                            'sports' => 'Sports',
-                                            'technology' => 'Technology',
-                                            'entertainment' => 'Entertainment'
+                                            'national' => 'NATIONAL NEWS',
+                                            'regional' => 'REGIONAL NEWS',
+                                            'local' => 'LOCAL NEWS IN  BRIEF',
+                                            'metro' => 'METRO NEWS',
+                                            'bisaya' => 'BISAYA NEWS',
+                                            'opinion' => 'OPINION',
+                                            'business' => 'BUSINESS UPDATES', 
+                                            'international' => 'INTERNATIONAL NEWS', 
+                                            'entertainment' => 'ENTERTAINMENT',
+                                            'sports' => 'SPORTS',
+                                            'faith' => 'FAITH',
                                         ];
                                         foreach ($categories as $value => $label): ?>
                                             <option value="<?php echo $value; ?>"

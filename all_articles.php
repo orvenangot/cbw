@@ -86,56 +86,81 @@ if (isset($_POST['edit_article']) && isset($_POST['unique_id'])) {
 
 // Handle Add Feedback
 if (isset($_POST['add_feedback'])) {
-    $fname = trim($_POST['fname']);
-    $lname = trim($_POST['lname']);
-    $feedback = trim($_POST['feedback']);
-    $user_id = $_SESSION['user_id'];
-    $imagePath = null;
-    if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-        $uploadDir = 'assets/img/users/';
-        $fileName = time() . basename($_FILES['image']['name']);
-        $targetFile = $uploadDir . $fileName;
-        if (move_uploaded_file($_FILES['image']['tmp_name'], $targetFile)) {
+    try {
+        $fname = trim($_POST['fname']);
+        $lname = trim($_POST['lname']);
+        $feedback = trim($_POST['feedback']);
+        $user_id = $_SESSION['user_id'];
+        $imagePath = null;
+        if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+            $uploadDir = 'assets/img/users/';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0777, true);
+            }
+            $fileName = time() . basename($_FILES['image']['name']);
+            $targetFile = $uploadDir . $fileName;
+            if (!move_uploaded_file($_FILES['image']['tmp_name'], $targetFile)) {
+                throw new Exception("Failed to move uploaded file.");
+            }
             $imagePath = $targetFile;
         }
+        $stmt = $conn->prepare("INSERT INTO tbl_feedbacks (fname, lname, image, feedback, user_id) VALUES (?, ?, ?, ?, ?)");
+        $stmt->execute([$fname, $lname, $imagePath, $feedback, $user_id]);
+        header('Location: ' . $_SERVER['PHP_SELF']);
+        exit();
+    } catch (Exception $e) {
+        error_log("Add Feedback Error: " . $e->getMessage(), 3, __DIR__ . '/feedback_error.log');
+        echo "<div class='alert alert-danger'>Add Feedback Error: " . htmlspecialchars($e->getMessage()) . "</div>";
     }
-    $stmt = $conn->prepare("INSERT INTO tbl_feedbacks (fname, lname, image, feedback, user_id) VALUES (?, ?, ?, ?, ?)");
-    $stmt->execute([$fname, $lname, $imagePath, $feedback, $user_id]);
-    header('Location: ' . $_SERVER['PHP_SELF']);
-    exit();
 }
 // Handle Edit Feedback
 if (isset($_POST['edit_feedback']) && isset($_POST['feedback_id'])) {
-    $feedback_id = $_POST['feedback_id'];
-    $fname = trim($_POST['fname']);
-    $lname = trim($_POST['lname']);
-    $feedback = trim($_POST['feedback']);
-    $imagePath = $_POST['existing_image'] ?? null;
-    if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-        $uploadDir = 'assets/img/users/';
-        $fileName = time() . basename($_FILES['image']['name']);
-        $targetFile = $uploadDir . $fileName;
-        if (move_uploaded_file($_FILES['image']['tmp_name'], $targetFile)) {
+    try {
+        $feedback_id = $_POST['feedback_id'];
+        $fname = trim($_POST['fname']);
+        $lname = trim($_POST['lname']);
+        $feedback = trim($_POST['feedback']);
+        $imagePath = $_POST['existing_image'] ?? null;
+        if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+            $uploadDir = 'assets/img/users/';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0777, true);
+            }
+            $fileName = time() . basename($_FILES['image']['name']);
+            $targetFile = $uploadDir . $fileName;
+            if (!move_uploaded_file($_FILES['image']['tmp_name'], $targetFile)) {
+                throw new Exception("Failed to move uploaded file.");
+            }
             $imagePath = $targetFile;
         }
+        $stmt = $conn->prepare("UPDATE tbl_feedbacks SET fname=?, lname=?, image=?, feedback=? WHERE unique_id=?");
+        $stmt->execute([$fname, $lname, $imagePath, $feedback, $feedback_id]);
+        header('Location: ' . $_SERVER['PHP_SELF']);
+        exit();
+    } catch (Exception $e) {
+        error_log("Edit Feedback Error: " . $e->getMessage(), 3, __DIR__ . '/feedback_error.log');
+        echo "<div class='alert alert-danger'>Edit Feedback Error: " . htmlspecialchars($e->getMessage()) . "</div>";
     }
-    $stmt = $conn->prepare("UPDATE tbl_feedbacks SET fname=?, lname=?, image=?, feedback=? WHERE unique_id=?");
-    $stmt->execute([$fname, $lname, $imagePath, $feedback, $feedback_id]);
-    header('Location: ' . $_SERVER['PHP_SELF']);
-    exit();
 }
 // Handle Delete Feedback
 if (isset($_POST['delete_feedback']) && isset($_POST['feedback_id'])) {
-    $stmt = $conn->prepare("SELECT image FROM tbl_feedbacks WHERE unique_id = ?");
-    $stmt->execute([$_POST['feedback_id']]);
-    $fb = $stmt->fetch();
-    if ($fb && $fb['image'] && file_exists($fb['image'])) {
-        unlink($fb['image']);
+    try {
+        $stmt = $conn->prepare("SELECT image FROM tbl_feedbacks WHERE unique_id = ?");
+        $stmt->execute([$_POST['feedback_id']]);
+        $fb = $stmt->fetch();
+        if ($fb && $fb['image'] && file_exists($fb['image'])) {
+            if (!unlink($fb['image'])) {
+                throw new Exception("Failed to delete feedback image file.");
+            }
+        }
+        $stmt = $conn->prepare("DELETE FROM tbl_feedbacks WHERE unique_id = ?");
+        $stmt->execute([$_POST['feedback_id']]);
+        header('Location: ' . $_SERVER['PHP_SELF']);
+        exit();
+    } catch (Exception $e) {
+        error_log("Delete Feedback Error: " . $e->getMessage(), 3, __DIR__ . '/feedback_error.log');
+        echo "<div class='alert alert-danger'>Delete Feedback Error: " . htmlspecialchars($e->getMessage()) . "</div>";
     }
-    $stmt = $conn->prepare("DELETE FROM tbl_feedbacks WHERE unique_id = ?");
-    $stmt->execute([$_POST['feedback_id']]);
-    header('Location: ' . $_SERVER['PHP_SELF']);
-    exit();
 }
 ?>
 <!DOCTYPE html>
@@ -172,81 +197,83 @@ if (isset($_POST['delete_feedback']) && isset($_POST['feedback_id'])) {
                                 </a>
                             </div>
 
-                            <table id="articlesTable" class="table datatable table-bordered table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>Date Created</th>
-                                        <th>Image</th>
-                                        <th>Author</th>
-                                        <th>Category</th>
-                                        <th>Headline</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php
-                                    // Refactored: Use bindColumn and FETCH_BOUND for articles
-                                    if ($_SESSION['user_role'] === 'Admin') {
-                                        $query = "SELECT unique_id, article_author, article_category, article_image, article_headline, article_subtitle, article_body, created_at FROM tbl_article ORDER BY created_at DESC";
-                                        $stmt = $pdo->prepare($query);
-                                        $stmt->execute();
-                                    } else {
-                                        $query = "SELECT unique_id, article_author, article_category, article_image, article_headline, article_subtitle, article_body, created_at FROM tbl_article WHERE article_author = ? ORDER BY created_at DESC";
-                                        $stmt = $pdo->prepare($query);
-                                        $stmt->execute([$_SESSION['user_fname'] . ' ' . $_SESSION['user_lname']]);
-                                    }
-                                    $stmt->bindColumn('unique_id', $unique_id);
-                                    $stmt->bindColumn('article_author', $article_author);
-                                    $stmt->bindColumn('article_category', $article_category);
-                                    $stmt->bindColumn('article_image', $article_image);
-                                    $stmt->bindColumn('article_headline', $article_headline);
-                                    $stmt->bindColumn('article_subtitle', $article_subtitle);
-                                    $stmt->bindColumn('article_body', $article_body);
-                                    $stmt->bindColumn('created_at', $created_at);
-                                    while ($row = $stmt->fetch(PDO::FETCH_BOUND)) {
-                                        $formatted_date = date_format(date_create($created_at),"M d, Y");
-                                        ?>
+                            <div class="table-responsive">
+                                <table id="articlesTable" class="table datatable table-bordered table-striped">
+                                    <thead>
                                         <tr>
-                                            <td><?php echo $formatted_date; ?></td>
-                                            <td>
-                                                <?php if($article_image!="") { ?>
-                                                    <img src="<?php echo $article_image; ?>" alt="Article Image" style="max-width: 100px; max-height: 100px;" class="img-thumbnail">
-                                                <?php } ?>
-                                            </td>
-                                            <td><?php echo htmlspecialchars($article_author); ?></td>
-                                            <td>
-                                                <?php
-                                                $category_badges = [
-                                                    'breaking' => 'danger',
-                                                    'local' => 'success',
-                                                    'national' => 'primary',
-                                                    'international' => 'info',
-                                                    'sports' => 'warning',
-                                                    'technology' => 'secondary',
-                                                    'entertainment' => 'success',
-                                                    'default' => 'dark',
-                                                ];
-                                                $badge = isset($category_badges[$article_category]) ? $category_badges[$article_category] : 'secondary';
-                                                ?>
-                                                <span class="badge bg-<?php echo $badge; ?>"><?php echo htmlspecialchars(ucfirst($article_category)); ?></span>
-                                            </td>
-                                            <td><?php echo htmlspecialchars($article_headline); ?></td>
-                                            <td>
-                                                <div class="btn-group" role="group">
-                                                    <a href="save_article.php?id=<?php echo $unique_id; ?>" class="btn btn-sm btn-primary" title="Edit">
-                                                        <i class="bi bi-pencil"></i>
-                                                    </a>
-                                                    <button type="button" class="btn btn-sm btn-danger" onclick="confirmDelete('<?php echo $unique_id; ?>')" title="Delete">
-                                                        <i class="bi bi-trash"></i>
-                                                    </button>
-                                                </div>
-                                            </td>
+                                            <th>Date Created</th>
+                                            <th>Image</th>
+                                            <th>Author</th>
+                                            <th>Category</th>
+                                            <th>Headline</th>
+                                            <th>Actions</th>
                                         </tr>
+                                    </thead>
+                                    <tbody>
                                         <?php
-                                    }
-                                    ?>
-                                </tbody>
-                            </table>
+                                        // Refactored: Use bindColumn and FETCH_BOUND for articles
+                                        if ($_SESSION['user_role'] === 'Admin') {
+                                            $query = "SELECT unique_id, article_author, article_category, article_image, article_headline, article_subtitle, article_body, created_at FROM tbl_article ORDER BY created_at DESC";
+                                            $stmt = $pdo->prepare($query);
+                                            $stmt->execute();
+                                        } else {
+                                            $query = "SELECT unique_id, article_author, article_category, article_image, article_headline, article_subtitle, article_body, created_at FROM tbl_article WHERE article_author = ? ORDER BY created_at DESC";
+                                            $stmt = $pdo->prepare($query);
+                                            $stmt->execute([$_SESSION['user_fname'] . ' ' . $_SESSION['user_lname']]);
+                                        }
+                                        $stmt->bindColumn('unique_id', $unique_id);
+                                        $stmt->bindColumn('article_author', $article_author);
+                                        $stmt->bindColumn('article_category', $article_category);
+                                        $stmt->bindColumn('article_image', $article_image);
+                                        $stmt->bindColumn('article_headline', $article_headline);
+                                        $stmt->bindColumn('article_subtitle', $article_subtitle);
+                                        $stmt->bindColumn('article_body', $article_body);
+                                        $stmt->bindColumn('created_at', $created_at);
+                                        while ($row = $stmt->fetch(PDO::FETCH_BOUND)) {
+                                            $formatted_date = date_format(date_create($created_at),"M d, Y");
+                                            ?>
+                                            <tr>
+                                                <td><?php echo $formatted_date; ?></td>
+                                                <td>
+                                                    <?php if($article_image!="") { ?>
+                                                        <img src="<?php echo $article_image; ?>" alt="Article Image" style="max-width: 100px; max-height: 100px;" class="img-thumbnail">
+                                                    <?php } ?>
+                                                </td>
+                                                <td><?php echo htmlspecialchars($article_author); ?></td>
+                                                <td>
+                                                    <?php
+                                                    $category_badges = [
+                                                        'breaking' => 'danger',
+                                                        'local' => 'success',
+                                                        'national' => 'primary',
+                                                        'international' => 'info',
+                                                        'sports' => 'warning',
+                                                        'technology' => 'secondary',
+                                                        'entertainment' => 'success',
+                                                        'default' => 'dark',
+                                                    ];
+                                                    $badge = isset($category_badges[$article_category]) ? $category_badges[$article_category] : 'secondary';
+                                                    ?>
+                                                    <span class="badge bg-<?php echo $badge; ?>"><?php echo htmlspecialchars(ucfirst($article_category)); ?></span>
+                                                </td>
+                                                <td><?php echo htmlspecialchars($article_headline); ?></td>
+                                                <td>
+                                                    <div class="btn-group" role="group">
+                                                        <a href="save_article.php?id=<?php echo $unique_id; ?>" class="btn btn-sm btn-primary" title="Edit">
+                                                            <i class="bi bi-pencil"></i>
+                                                        </a>
+                                                        <button type="button" class="btn btn-sm btn-danger" onclick="confirmDelete('<?php echo $unique_id; ?>')" title="Delete">
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            <?php
+                                        }
+                                        ?>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -260,53 +287,55 @@ if (isset($_POST['delete_feedback']) && isset($_POST['feedback_id'])) {
                                     <i class="bi bi-plus-circle"></i> Add Feedback
                                 </button>
                             </div>
-                            <table id="feedbackTable" class="table datatable table-bordered table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>Image</th>
-                                        <th>Full Name</th>
-                                        <th>Feedback</th>
-                                        <th>Created At</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php
-                                    // Refactored: Use bindColumn and FETCH_BOUND for feedbacks
-                                    $query = "SELECT unique_id, fname, lname, image, feedback, created_at FROM tbl_feedbacks ORDER BY created_at DESC";
-                                    $stmt = $pdo->prepare($query);
-                                    $stmt->execute();
-                                    $stmt->bindColumn('unique_id', $fb_unique_id);
-                                    $stmt->bindColumn('fname', $fb_fname);
-                                    $stmt->bindColumn('lname', $fb_lname);
-                                    $stmt->bindColumn('image', $fb_image);
-                                    $stmt->bindColumn('feedback', $fb_feedback);
-                                    $stmt->bindColumn('created_at', $fb_created_at);
-                                    while ($row = $stmt->fetch(PDO::FETCH_BOUND)) {
-                                        $full_name = $fb_fname . ' ' . $fb_lname;
-                                        $formatted_date = date('M d, Y h:i A', strtotime($fb_created_at));
-                                        ?>
+                            <div class="table-responsive">
+                                <table id="feedbackTable" class="table datatable table-bordered table-striped">
+                                    <thead>
                                         <tr>
-                                            <td>
-                                                <?php if ($fb_image): ?>
-                                                    <img src="<?php echo $fb_image; ?>" alt="User Image" style="max-width: 100px; max-height: 100px;" class="img-thumbnail">
-                                                <?php endif; ?>
-                                            </td>
-                                            <td><?php echo htmlspecialchars($full_name); ?></td>
-                                            <td><?php echo htmlspecialchars($fb_feedback); ?></td>
-                                            <td><?php echo $formatted_date; ?></td>
-                                            <td>
-                                                <div class="btn-group" role="group">
-                                                    <button type="button" class="btn btn-sm btn-primary" onclick="editFeedback('<?php echo $fb_unique_id; ?>', '<?php echo htmlspecialchars(addslashes($fb_fname)); ?>', '<?php echo htmlspecialchars(addslashes($fb_lname)); ?>', '<?php echo htmlspecialchars(addslashes($fb_feedback)); ?>', '<?php echo $fb_image; ?>')" title="Edit"><i class="bi bi-pencil"></i></button>
-                                                    <button type="button" class="btn btn-sm btn-danger" onclick="confirmDeleteFeedback('<?php echo $fb_unique_id; ?>')" title="Delete"><i class="bi bi-trash"></i></button>
-                                                </div>
-                                            </td>
+                                            <th>Image</th>
+                                            <th>Full Name</th>
+                                            <th>Feedback</th>
+                                            <th>Created At</th>
+                                            <th>Actions</th>
                                         </tr>
+                                    </thead>
+                                    <tbody>
                                         <?php
-                                    }
-                                    ?>
-                                </tbody>
-                            </table>
+                                        // Refactored: Use bindColumn and FETCH_BOUND for feedbacks
+                                        $query = "SELECT unique_id, fname, lname, image, feedback, created_at FROM tbl_feedbacks ORDER BY created_at DESC";
+                                        $stmt = $pdo->prepare($query);
+                                        $stmt->execute();
+                                        $stmt->bindColumn('unique_id', $fb_unique_id);
+                                        $stmt->bindColumn('fname', $fb_fname);
+                                        $stmt->bindColumn('lname', $fb_lname);
+                                        $stmt->bindColumn('image', $fb_image);
+                                        $stmt->bindColumn('feedback', $fb_feedback);
+                                        $stmt->bindColumn('created_at', $fb_created_at);
+                                        while ($row = $stmt->fetch(PDO::FETCH_BOUND)) {
+                                            $full_name = $fb_fname . ' ' . $fb_lname;
+                                            $formatted_date = date('M d, Y h:i A', strtotime($fb_created_at));
+                                            ?>
+                                            <tr>
+                                                <td>
+                                                    <?php if ($fb_image): ?>
+                                                        <img src="<?php echo $fb_image; ?>" alt="User Image" style="max-width: 100px; max-height: 100px;" class="img-thumbnail">
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td><?php echo htmlspecialchars($full_name); ?></td>
+                                                <td><?php echo htmlspecialchars($fb_feedback); ?></td>
+                                                <td><?php echo $formatted_date; ?></td>
+                                                <td>
+                                                    <div class="btn-group" role="group">
+                                                        <button type="button" class="btn btn-sm btn-primary" onclick="editFeedback('<?php echo $fb_unique_id; ?>', '<?php echo htmlspecialchars(addslashes($fb_fname)); ?>', '<?php echo htmlspecialchars(addslashes($fb_lname)); ?>', '<?php echo htmlspecialchars(addslashes($fb_feedback)); ?>', '<?php echo $fb_image; ?>')" title="Edit"><i class="bi bi-pencil"></i></button>
+                                                        <button type="button" class="btn btn-sm btn-danger" onclick="confirmDeleteFeedback('<?php echo $fb_unique_id; ?>')" title="Delete"><i class="bi bi-trash"></i></button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            <?php
+                                        }
+                                        ?>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -336,7 +365,7 @@ if (isset($_POST['delete_feedback']) && isset($_POST['feedback_id'])) {
                       </div>
                       <div class="mb-3">
                         <label for="image" class="form-label">Image</label>
-                        <input type="file" class="form-control" name="image" id="image" accept="image/*">
+                        <input type="file" class="form-control" name="image" id="image" accept="image/*" required>
                       </div>
                       <div class="mb-3">
                         <label for="feedback" class="form-label">Feedback</label>
