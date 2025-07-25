@@ -166,7 +166,8 @@ if (isset($_POST['delete_feedback']) && isset($_POST['feedback_id'])) {
 <!DOCTYPE html>
 <html lang="en">
 
-<?php include('header.php');?>
+<?php include('header.php'); ?>
+
 <body>
     <!-- ======= Header ======= -->
     <?php include('index_header.php'); ?>
@@ -230,12 +231,12 @@ if (isset($_POST['delete_feedback']) && isset($_POST['feedback_id'])) {
                                         $stmt->bindColumn('article_body', $article_body);
                                         $stmt->bindColumn('created_at', $created_at);
                                         while ($row = $stmt->fetch(PDO::FETCH_BOUND)) {
-                                            $formatted_date = date_format(date_create($created_at),"M d, Y");
-                                            ?>
+                                            $formatted_date = date_format(date_create($created_at), "M d, Y");
+                                        ?>
                                             <tr>
                                                 <td><?php echo $formatted_date; ?></td>
                                                 <td>
-                                                    <?php if($article_image!="") { ?>
+                                                    <?php if ($article_image != "") { ?>
                                                         <img src="<?php echo $article_image; ?>" alt="Article Image" style="max-width: 100px; max-height: 100px;" class="img-thumbnail">
                                                     <?php } ?>
                                                 </td>
@@ -243,14 +244,18 @@ if (isset($_POST['delete_feedback']) && isset($_POST['feedback_id'])) {
                                                 <td>
                                                     <?php
                                                     $category_badges = [
-                                                        'breaking' => 'danger',
-                                                        'local' => 'success',
-                                                        'national' => 'primary',
-                                                        'international' => 'info',
-                                                        'sports' => 'warning',
-                                                        'technology' => 'secondary',
-                                                        'entertainment' => 'success',
-                                                        'default' => 'dark',
+                                                        'national' => 'primary',       
+                                                        'regional' => 'secondary',      
+                                                        'local' => 'success',          
+                                                        'metro' => 'info',            
+                                                        'bisaya' => 'warning',           
+                                                        'opinion' => 'dark',            
+                                                        'business' => 'secondary',     
+                                                        'international' => 'danger',   
+                                                        'entertainment' => 'primary',    
+                                                        'sports' => 'warning',        
+                                                        'faith' => 'info',            
+                                                        'default' => 'dark',          
                                                     ];
                                                     $badge = isset($category_badges[$article_category]) ? $category_badges[$article_category] : 'secondary';
                                                     ?>
@@ -268,7 +273,7 @@ if (isset($_POST['delete_feedback']) && isset($_POST['feedback_id'])) {
                                                     </div>
                                                 </td>
                                             </tr>
-                                            <?php
+                                        <?php
                                         }
                                         ?>
                                     </tbody>
@@ -279,66 +284,66 @@ if (isset($_POST['delete_feedback']) && isset($_POST['feedback_id'])) {
                 </div>
             </div>
             <div class="col-lg-12 mt-4">
-                    <div class="card">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <h5 class="card-title mb-0">Feedback Management</h5>
-                                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addFeedbackModal">
-                                    <i class="bi bi-plus-circle"></i> Add Feedback
-                                </button>
-                            </div>
-                            <div class="table-responsive">
-                                <table id="feedbackTable" class="table datatable table-bordered table-striped">
-                                    <thead>
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="card-title mb-0">Feedback Management</h5>
+                            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addFeedbackModal">
+                                <i class="bi bi-plus-circle"></i> Add Feedback
+                            </button>
+                        </div>
+                        <div class="table-responsive">
+                            <table id="feedbackTable" class="table datatable table-bordered table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Image</th>
+                                        <th>Full Name</th>
+                                        <th>Feedback</th>
+                                        <th>Created At</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php
+                                    // Refactored: Use bindColumn and FETCH_BOUND for feedbacks
+                                    $query = "SELECT unique_id, fname, lname, image, feedback, created_at FROM tbl_feedbacks ORDER BY created_at DESC";
+                                    $stmt = $pdo->prepare($query);
+                                    $stmt->execute();
+                                    $stmt->bindColumn('unique_id', $fb_unique_id);
+                                    $stmt->bindColumn('fname', $fb_fname);
+                                    $stmt->bindColumn('lname', $fb_lname);
+                                    $stmt->bindColumn('image', $fb_image);
+                                    $stmt->bindColumn('feedback', $fb_feedback);
+                                    $stmt->bindColumn('created_at', $fb_created_at);
+                                    while ($row = $stmt->fetch(PDO::FETCH_BOUND)) {
+                                        $full_name = $fb_fname . ' ' . $fb_lname;
+                                        $formatted_date = date('M d, Y h:i A', strtotime($fb_created_at));
+                                    ?>
                                         <tr>
-                                            <th>Image</th>
-                                            <th>Full Name</th>
-                                            <th>Feedback</th>
-                                            <th>Created At</th>
-                                            <th>Actions</th>
+                                            <td>
+                                                <?php if ($fb_image) : ?>
+                                                    <img src="<?php echo $fb_image; ?>" alt="User Image" style="max-width: 100px; max-height: 100px;" class="img-thumbnail">
+                                                <?php endif; ?>
+                                            </td>
+                                            <td><?php echo htmlspecialchars($full_name); ?></td>
+                                            <td><?php echo htmlspecialchars($fb_feedback); ?></td>
+                                            <td><?php echo $formatted_date; ?></td>
+                                            <td>
+                                                <div class="btn-group" role="group">
+                                                    <button type="button" class="btn btn-sm btn-primary" onclick="editFeedback('<?php echo $fb_unique_id; ?>', '<?php echo htmlspecialchars(addslashes($fb_fname)); ?>', '<?php echo htmlspecialchars(addslashes($fb_lname)); ?>', '<?php echo htmlspecialchars(addslashes($fb_feedback)); ?>', '<?php echo $fb_image; ?>')" title="Edit"><i class="bi bi-pencil"></i></button>
+                                                    <button type="button" class="btn btn-sm btn-danger" onclick="confirmDeleteFeedback('<?php echo $fb_unique_id; ?>')" title="Delete"><i class="bi bi-trash"></i></button>
+                                                </div>
+                                            </td>
                                         </tr>
-                                    </thead>
-                                    <tbody>
-                                        <?php
-                                        // Refactored: Use bindColumn and FETCH_BOUND for feedbacks
-                                        $query = "SELECT unique_id, fname, lname, image, feedback, created_at FROM tbl_feedbacks ORDER BY created_at DESC";
-                                        $stmt = $pdo->prepare($query);
-                                        $stmt->execute();
-                                        $stmt->bindColumn('unique_id', $fb_unique_id);
-                                        $stmt->bindColumn('fname', $fb_fname);
-                                        $stmt->bindColumn('lname', $fb_lname);
-                                        $stmt->bindColumn('image', $fb_image);
-                                        $stmt->bindColumn('feedback', $fb_feedback);
-                                        $stmt->bindColumn('created_at', $fb_created_at);
-                                        while ($row = $stmt->fetch(PDO::FETCH_BOUND)) {
-                                            $full_name = $fb_fname . ' ' . $fb_lname;
-                                            $formatted_date = date('M d, Y h:i A', strtotime($fb_created_at));
-                                            ?>
-                                            <tr>
-                                                <td>
-                                                    <?php if ($fb_image): ?>
-                                                        <img src="<?php echo $fb_image; ?>" alt="User Image" style="max-width: 100px; max-height: 100px;" class="img-thumbnail">
-                                                    <?php endif; ?>
-                                                </td>
-                                                <td><?php echo htmlspecialchars($full_name); ?></td>
-                                                <td><?php echo htmlspecialchars($fb_feedback); ?></td>
-                                                <td><?php echo $formatted_date; ?></td>
-                                                <td>
-                                                    <div class="btn-group" role="group">
-                                                        <button type="button" class="btn btn-sm btn-primary" onclick="editFeedback('<?php echo $fb_unique_id; ?>', '<?php echo htmlspecialchars(addslashes($fb_fname)); ?>', '<?php echo htmlspecialchars(addslashes($fb_lname)); ?>', '<?php echo htmlspecialchars(addslashes($fb_feedback)); ?>', '<?php echo $fb_image; ?>')" title="Edit"><i class="bi bi-pencil"></i></button>
-                                                        <button type="button" class="btn btn-sm btn-danger" onclick="confirmDeleteFeedback('<?php echo $fb_unique_id; ?>')" title="Delete"><i class="bi bi-trash"></i></button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                            <?php
-                                        }
-                                        ?>
-                                    </tbody>
-                                </table>
-                            </div>
+                                    <?php
+                                    }
+                                    ?>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
+            </div>
             </div>
             <!-- Delete Form (Hidden) -->
             <form id="deleteForm" method="POST" style="display: none;">
@@ -347,76 +352,76 @@ if (isset($_POST['delete_feedback']) && isset($_POST['feedback_id'])) {
             </form>
             <!-- Add Feedback Modal -->
             <div class="modal fade" id="addFeedbackModal" tabindex="-1" aria-labelledby="addFeedbackModalLabel" aria-hidden="true">
-              <div class="modal-dialog">
-                <div class="modal-content">
-                  <form id="addFeedbackForm" method="POST" enctype="multipart/form-data">
-                    <div class="modal-header">
-                      <h5 class="modal-title" id="addFeedbackModalLabel">Add Feedback</h5>
-                      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <form id="addFeedbackForm" method="POST" enctype="multipart/form-data">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="addFeedbackModalLabel">Add Feedback</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <label for="fname" class="form-label">First Name</label>
+                                    <input type="text" class="form-control" name="fname" id="fname" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="lname" class="form-label">Last Name</label>
+                                    <input type="text" class="form-control" name="lname" id="lname" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="image" class="form-label">Image</label>
+                                    <input type="file" class="form-control" name="image" id="image" accept="image/*" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="feedback" class="form-label">Feedback</label>
+                                    <textarea class="form-control" name="feedback" id="feedback" rows="3" required></textarea>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                <button type="submit" class="btn btn-primary" name="add_feedback">Submit</button>
+                            </div>
+                        </form>
                     </div>
-                    <div class="modal-body">
-                      <div class="mb-3">
-                        <label for="fname" class="form-label">First Name</label>
-                        <input type="text" class="form-control" name="fname" id="fname" required>
-                      </div>
-                      <div class="mb-3">
-                        <label for="lname" class="form-label">Last Name</label>
-                        <input type="text" class="form-control" name="lname" id="lname" required>
-                      </div>
-                      <div class="mb-3">
-                        <label for="image" class="form-label">Image</label>
-                        <input type="file" class="form-control" name="image" id="image" accept="image/*" required>
-                      </div>
-                      <div class="mb-3">
-                        <label for="feedback" class="form-label">Feedback</label>
-                        <textarea class="form-control" name="feedback" id="feedback" rows="3" required></textarea>
-                      </div>
-                    </div>
-                    <div class="modal-footer">
-                      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                      <button type="submit" class="btn btn-primary" name="add_feedback">Submit</button>
-                    </div>
-                  </form>
                 </div>
-              </div>
             </div>
             <!-- Edit Feedback Modal -->
             <div class="modal fade" id="editFeedbackModal" tabindex="-1" aria-labelledby="editFeedbackModalLabel" aria-hidden="true">
-              <div class="modal-dialog">
-                <div class="modal-content">
-                  <form method="POST" enctype="multipart/form-data">
-                    <input type="hidden" name="feedback_id" id="edit_feedback_id">
-                    <input type="hidden" name="existing_image" id="edit_existing_image">
-                    <div class="modal-header">
-                      <h5 class="modal-title" id="editFeedbackModalLabel">Edit Feedback</h5>
-                      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <form method="POST" enctype="multipart/form-data">
+                            <input type="hidden" name="feedback_id" id="edit_feedback_id">
+                            <input type="hidden" name="existing_image" id="edit_existing_image">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="editFeedbackModalLabel">Edit Feedback</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <label for="edit_fname" class="form-label">First Name</label>
+                                    <input type="text" class="form-control" name="fname" id="edit_fname" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="edit_lname" class="form-label">Last Name</label>
+                                    <input type="text" class="form-control" name="lname" id="edit_lname" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="edit_image" class="form-label">Image</label>
+                                    <input type="file" class="form-control" name="image" id="edit_image" accept="image/*">
+                                    <img id="edit_image_preview" src="" alt="Current Image" style="max-width: 100px; max-height: 100px; margin-top: 10px; display: none;" class="img-thumbnail">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="edit_feedback" class="form-label">Feedback</label>
+                                    <textarea class="form-control" name="feedback" id="edit_feedback" rows="3" required></textarea>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                <button type="submit" class="btn btn-primary" name="edit_feedback">Save Changes</button>
+                            </div>
+                        </form>
                     </div>
-                    <div class="modal-body">
-                      <div class="mb-3">
-                        <label for="edit_fname" class="form-label">First Name</label>
-                        <input type="text" class="form-control" name="fname" id="edit_fname" required>
-                      </div>
-                      <div class="mb-3">
-                        <label for="edit_lname" class="form-label">Last Name</label>
-                        <input type="text" class="form-control" name="lname" id="edit_lname" required>
-                      </div>
-                      <div class="mb-3">
-                        <label for="edit_image" class="form-label">Image</label>
-                        <input type="file" class="form-control" name="image" id="edit_image" accept="image/*">
-                        <img id="edit_image_preview" src="" alt="Current Image" style="max-width: 100px; max-height: 100px; margin-top: 10px; display: none;" class="img-thumbnail">
-                      </div>
-                      <div class="mb-3">
-                        <label for="edit_feedback" class="form-label">Feedback</label>
-                        <textarea class="form-control" name="feedback" id="edit_feedback" rows="3" required></textarea>
-                      </div>
-                    </div>
-                    <div class="modal-footer">
-                      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                      <button type="submit" class="btn btn-primary" name="edit_feedback">Save Changes</button>
-                    </div>
-                  </form>
                 </div>
-              </div>
             </div>
             <!-- Delete Feedback Form (Hidden) -->
             <form id="deleteFeedbackForm" method="POST" style="display: none;">
@@ -452,7 +457,7 @@ if (isset($_POST['delete_feedback']) && isset($_POST['feedback_id'])) {
             }).buttons().container().appendTo('#articlesTable_wrapper .col-md-6:eq(0)');
 
             // Show toast if there's a message
-            <?php if (isset($msg)): ?>
+            <?php if (isset($msg)) : ?>
                 var toast = new bootstrap.Toast(document.getElementById('notificationToast'));
                 toast.show();
             <?php endif; ?>
@@ -461,7 +466,7 @@ if (isset($_POST['delete_feedback']) && isset($_POST['feedback_id'])) {
             document.addEventListener('DOMContentLoaded', function() {
                 var addFeedbackModal = document.getElementById('addFeedbackModal');
                 if (addFeedbackModal) {
-                    addFeedbackModal.addEventListener('show.bs.modal', function (event) {
+                    addFeedbackModal.addEventListener('show.bs.modal', function(event) {
                         var form = document.getElementById('addFeedbackForm');
                         if (form) {
                             form.reset();
@@ -493,6 +498,7 @@ if (isset($_POST['delete_feedback']) && isset($_POST['feedback_id'])) {
                 document.getElementById('deleteFeedbackForm').submit();
             }
         }
+
         function editFeedback(id, fname, lname, feedback, image) {
             document.getElementById('edit_feedback_id').value = id;
             document.getElementById('edit_fname').value = fname;
